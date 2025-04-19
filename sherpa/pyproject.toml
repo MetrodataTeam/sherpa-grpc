@@ -1,0 +1,29 @@
+[build-system]
+build-backend = "poetry.core.masonry.api"
+requires = ["poetry-core"]
+
+[tool.poetry]
+authors = ["Deo <liangzhanzhao@metrodata.cn>"]
+description = "grpc server for ASR using sherpa-onnx"
+name = "mdt-grpc-sherpa"
+package-mode = false
+readme = "README.md"
+version = "0.0.0"
+
+[tool.poetry.dependencies]
+av = "^14.0.1"
+betterproto = "v2.0.0b7"
+grpclib = {version = ">=0.4.7", extras = ["protobuf"]}
+numpy = ">2"
+pydantic-settings = ">=2.0.3"
+python = ">=3.11.0,<3.13"
+
+[tool.poetry.group.gpu]
+optional = true
+
+[tool.poetry.group.gpu.dependencies]
+sherpa-onnx = {version = "1.10.45+cuda", source = "k2-fsa"}
+
+[[tool.poetry.source]]
+name = "k2-fsa"
+url = "https://k2-fsa.github.io/sherpa/onnx/cuda-cn.html"

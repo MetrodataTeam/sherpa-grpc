@@ -1,0 +1,71 @@
+syntax = "proto3";
+import "google/protobuf/wrappers.proto";
+package sherpa;
+
+service SherpaService{
+  rpc vad(Audio) returns (OfflineSpeakerDiarizationResult) {}
+  rpc offline_recognize(Audio) returns (OfflineRecognitionResult) {}
+  rpc offline_speaker_diarization(Audio) returns (OfflineSpeakerDiarizationResult) {}
+}
+
+enum SenseVoiceLanguage {
+  auto = 0;
+  zh = 1;
+  en = 2;
+  yue = 3;
+  ja = 4;
+  ko = 5;
+  nospeech = 6;
+}
+
+enum SenseVoiceTextnorm{
+  withitn = 0;
+  woitn = 1;
+}
+
+message SenseVoiceConfig {
+  optional SenseVoiceLanguage lang = 1;
+  optional SenseVoiceTextnorm textnorm = 2;
+}
+
+message DiarizationConfig{
+  google.protobuf.Int32Value clustering_num_clusters = 1;
+  google.protobuf.FloatValue clustering_threshold = 2;
+  optional bool recognize = 3;
+}
+
+message PunctuationConfig{
+  optional bool enable = 1;
+}
+
+message Audio{
+  // for debug/logging usage
+  optional string info = 2;
+  bytes data = 1;
+  // whether the data is numpy array
+  optional bool is_numpy_data = 7;
+  optional SenseVoiceConfig sense_voice = 3;
+  optional DiarizationConfig diarization = 4;
+  optional PunctuationConfig punctuation = 5;
+}
+
+message OfflineRecognitionResult {
+  string lang = 1;
+  string emotion = 2;
+  string event = 3;
+  string text = 4;
+  repeated float timestamps = 5;
+  repeated string tokens = 6;
+  repeated string words = 7;
+}
+
+message OfflineSpeakerDiarizationSegment {
+  uint32 speaker = 1;
+  float start = 2;
+  float end = 3;
+  string text = 4;
+}
+
+message OfflineSpeakerDiarizationResult {
+  repeated OfflineSpeakerDiarizationSegment segments = 1;
+}

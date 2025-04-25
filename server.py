@@ -1,36 +1,37 @@
 import asyncio
-from enum import StrEnum
-from io import BytesIO
 import logging
 import os
+from enum import StrEnum
+from io import BytesIO
 from time import time
 from typing import List
 
-from audio import decode_audio
-from data import OfflineRecognitionResult as _OfflineRecognitionResult
-from data import (
-  OfflineSpeakerDiarizationSegment as _OfflineSpeakerDiarizationSegment,
-)
+import numpy as np
+import sherpa_onnx
 from grpclib.const import Status
 from grpclib.exceptions import GRPCError
 from grpclib.health.service import Health
 from grpclib.reflection.service import ServerReflection
 from grpclib.server import Server
 from grpclib.utils import graceful_exit
-import numpy as np
-from pydantic import Field
-from pydantic import model_validator
-from pydantic_settings import BaseSettings
-from pydantic_settings import SettingsConfigDict
-import sherpa_onnx
+from pydantic import Field, model_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from pb.sherpa import Audio
-from pb.sherpa import DiarizationConfig
-from pb.sherpa import OfflineRecognitionResult
-from pb.sherpa import OfflineSpeakerDiarizationResult
-from pb.sherpa import OfflineSpeakerDiarizationSegment
-from pb.sherpa import PunctuationConfig
-from pb.sherpa import SherpaServiceBase
+from audio import decode_audio, load_audio
+from data import OfflineRecognitionResult as _OfflineRecognitionResult
+from data import (
+  OfflineSpeakerDiarizationSegment as _OfflineSpeakerDiarizationSegment,
+)
+from pb.sherpa import (
+  Audio,
+  DiarizationConfig,
+  OfflineRecognitionResult,
+  OfflineSpeakerDiarizationResult,
+  OfflineSpeakerDiarizationSegment,
+  OfflineSpeakerIdentificationResult,
+  PunctuationConfig,
+  SherpaServiceBase,
+)
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -103,10 +104,15 @@ class Settings(BaseSettings):
     PunchuationVendor.ct_punc, description='punctuation vendor'
   )
   punctuation_model: str = Field('', description='punctuation model')
+  speaker_identification_model: str = Field(
+    '',
+    description='speaker identification model https://k2-fsa.github.io/sherpa/onnx/speaker-identification/index.html',
+  )
   feature_offline_recognizer: bool = Field(False)
   feature_offline_speaker_diarization: bool = Field(False)
   feature_vad: bool = Field(False)
   feature_punctuation: bool = Field(False)
+  feature_speaker_identification: bool = Field(False)
   host: str = Field('0.0.0.0', description='listen host')
   port: int = Field(18913, description='listen port')
   debug: bool = Field(False)
@@ -121,6 +127,9 @@ class Settings(BaseSettings):
         raise ValueError('segmentation model is required')
       if not self.embedding_model:
         raise ValueError('embedding model is required')
+    if self.feature_speaker_identification:
+      if not self.speaker_identification_model:
+        raise ValueError('speaker identification model is required')
     return self
 
 
@@ -129,6 +138,7 @@ class SherpaService(SherpaServiceBase):
   diarization_model = None
   vad_model: sherpa_onnx.VoiceActivityDetector = None
   punctuation_model = None
+  speaker_identification_model: sherpa_onnx.SpeakerEmbeddingExtractor = None
 
   def __init__(self, settings: Settings):
     if settings.feature_offline_recognizer:
@@ -236,6 +246,15 @@ class SherpaService(SherpaServiceBase):
           raise NotImplementedError(
             f'unsupported punctuation vendor {settings.punctuation_vendor}'
           )
+    if settings.feature_speaker_identification:
+      config = sherpa_onnx.SpeakerEmbeddingExtractorConfig(
+        model=settings.speaker_identification_model,
+        num_threads=settings.num_threads,
+        provider=settings.execution_provider,
+      )
+      self.speaker_identification_model = sherpa_onnx.SpeakerEmbeddingExtractor(
+        config
+      )
 
   async def vad(self, request: Audio) -> OfflineSpeakerDiarizationResult:
     if self.vad_model is None:
@@ -279,6 +298,45 @@ class SherpaService(SherpaServiceBase):
       'finish vad %s in %.3f ms', request.info or 'data', time_span * 1000
     )
     return OfflineSpeakerDiarizationResult(segments=segments)
+
+  async def offline_speaker_identification(
+    self, audio
+  ) -> OfflineSpeakerIdentificationResult:
+    if self.speaker_identification_model is None:
+      raise GRPCError(
+        Status.FAILED_PRECONDITION, 'speaker identification model not loaded'
+      )
+    start = time()
+    # TODO(Deo): use decode_audio directly
+    if audio.is_numpy_data:
+      raise GRPCError(
+        Status.FAILED_PRECONDITION,
+        'numpy data not supported for speaker identification',
+      )
+      # data = np.frombuffer(audio.data, dtype=np.float32).copy()
+    else:
+      samples, sample_rate = load_audio(audio.data)
+      # data = decode_audio(BytesIO(audio.data))
+    stream = self.speaker_identification_model.create_stream()
+    stream.accept_waveform(sample_rate=sample_rate, waveform=samples)
+    stream.input_finished()
+
+    if not self.speaker_identification_model.is_ready(stream):
+      raise GRPCError(
+        Status.FAILED_PRECONDITION,
+        f'speaker identification input audio error {audio.info}',
+      )
+    embedding = self.speaker_identification_model.compute(stream)
+    embedding = np.array(embedding)
+    result = OfflineSpeakerIdentificationResult(
+      embedding=embedding.tolist(),
+    )
+    logger.info(
+      'finish speaker identification %s in %.3f ms',
+      audio.info or 'data',
+      (time() - start) * 1000,
+    )
+    return result
 
   async def offline_recognize(self, request: Audio) -> OfflineRecognitionResult:
     if self.offline_recognizer_model is None:
@@ -436,6 +494,11 @@ async def serve(settings: Settings):
         'punctuation model: %s %s',
         settings.punctuation_vendor,
         settings.punctuation_model,
+      )
+    if settings.feature_speaker_identification:
+      logger.info(
+        'speaker identification model: %s',
+        settings.speaker_identification_model,
       )
     await server.wait_closed()
     logger.info('Goodbye!')

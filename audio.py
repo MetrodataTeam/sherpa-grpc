@@ -3,11 +3,33 @@
 import gc
 import io
 import itertools
-from typing import BinaryIO
-from typing import Union
+from typing import BinaryIO, Union
 
 import av
 import numpy as np
+import soundfile as sf
+from grpclib.const import Status
+from grpclib.exceptions import GRPCError
+
+
+def load_audio(blob: bytes):
+  """load audio file"""
+  with io.BytesIO(blob) as f:
+    try:
+      data, sample_rate = sf.read(
+        f,
+        always_2d=True,
+        dtype='float32',
+      )
+    except sf.LibsndfileError:
+      raise GRPCError(
+        Status.INVALID_ARGUMENT,
+        message='Invalid audio file',
+      )
+  # use only the first channel
+  data = data[:, 0]
+  samples = np.ascontiguousarray(data)
+  return samples, sample_rate
 
 
 def decode_audio(

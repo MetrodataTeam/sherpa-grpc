@@ -6,6 +6,7 @@ service SherpaService{
   rpc vad(Audio) returns (OfflineSpeakerDiarizationResult) {}
   rpc offline_recognize(Audio) returns (OfflineRecognitionResult) {}
   rpc offline_speaker_diarization(Audio) returns (OfflineSpeakerDiarizationResult) {}
+  rpc offline_speaker_identification(Audio) returns (OfflineSpeakerIdentificationResult) {}
 }
 
 enum SenseVoiceLanguage {
@@ -49,6 +50,7 @@ message Audio{
   optional PunctuationConfig punctuation = 5;
 }
 
+
 message OfflineRecognitionResult {
   string lang = 1;
   string emotion = 2;
@@ -68,4 +70,8 @@ message OfflineSpeakerDiarizationSegment {
 
 message OfflineSpeakerDiarizationResult {
   repeated OfflineSpeakerDiarizationSegment segments = 1;
+}
+
+message OfflineSpeakerIdentificationResult {
+  repeated float embedding = 1;
 }

@@ -17,6 +17,7 @@ grpclib = {version = ">=0.4.7", extras = ["protobuf"]}
 numpy = ">2"
 pydantic-settings = ">=2.0.3"
 python = ">=3.11.0,<3.13"
+sherpa-onnx = "1.11.3"
 soundfile = "^0.13.1"
 
 [tool.poetry.group.test]
@@ -28,23 +29,6 @@ grpcio-tools = ">=1.59.0"
 pytest = "^8.2.0"
 pytest-cov = ">=6.0.0"
 ruff = ">=0.11.5"
-
-[tool.poetry.group.cpu]
-optional = true
-
-[tool.poetry.group.cpu.dependencies]
-
-sherpa-onnx = "1.11.3"
-
-[tool.poetry.group.gpu]
-optional = true
-
-[tool.poetry.group.gpu.dependencies]
-sherpa-onnx = {version = "1.11.3+cuda", source = "k2-fsa"}
-
-[[tool.poetry.source]]
-name = "k2-fsa"
-url = "https://k2-fsa.github.io/sherpa/onnx/cuda-cn.html"
 
 [tool.ruff]
 # Exclude a variety of commonly ignored directories.

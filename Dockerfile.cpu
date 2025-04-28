@@ -1,0 +1,23 @@
+ARG BASE_IMAGE=python:3.12.10-slim
+FROM ${BASE_IMAGE}
+
+ARG target=/mdt/run
+
+WORKDIR ${target}
+ARG DEBIAN_FRONTEND=noninteractive
+ARG PYPI
+RUN apt update && \
+  apt install -y --no-install-recommends libasound2 && \
+  pip install --no-cache-dir ${PYPI} poetry==2.0.1 && \
+  poetry config virtualenvs.create false
+
+ADD pyproject.toml poetry.lock ${target}/
+
+RUN poetry install --no-cache --no-root
+
+COPY pb/ ${target}/pb/
+COPY *.py ${target}/
+
+RUN python -m compileall ${target}
+CMD ["python", "server.py"]
+EXPOSE 18913

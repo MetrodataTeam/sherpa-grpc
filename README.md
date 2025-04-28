@@ -34,6 +34,11 @@ SHERPA_EXECUTION_PROVIDER=cpu SHERPA_OFFLINE_RECOGNIZER_MODEL=~/Downloads/sherpa
 SHERPA_EXECUTION_PROVIDER=cpu SHERPA_FEATURE_SPEAKER_IDENTIFICATION=1 SHERPA_SPEAKER_IDENTIFICATION_MODEL=~/Downloads/3dspeaker_speech_campplus_sv_zh-cn_16k-common.onnx  python server.py
 ```
 
+# docker build
+```bash
+docker build --build-arg BASE_IMAGE=python:3.12.10-slim --build-arg PYPI="" -t sherpa-grpc:test -f Dockerfile.cpu .
+```
+
 ## configuration
 | environment               | default | comment     |
 | ------------------------- | ------- | ----------- |

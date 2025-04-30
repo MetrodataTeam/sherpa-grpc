@@ -12,8 +12,38 @@ from grpclib.const import Status
 from grpclib.exceptions import GRPCError
 
 
-def load_audio(blob: bytes):
+def convert_input_bytes_to_wav_bytes(input_bytes) -> bytes:
+  # 创建一个 BytesIO 对象用于读取输入字节流
+  # 创建一个 BytesIO 对象用于写入 WAV 字节流
+  with io.BytesIO(input_bytes) as input_buffer, io.BytesIO() as output_buffer:
+    # 打开输入容器（自动检测格式）
+    with (
+      av.open(input_buffer) as input_container,
+      av.open(output_buffer, mode='w', format='wav') as output_container,
+    ):
+      # 添加音频流，使用 PCM 编码
+      output_stream = output_container.add_stream('pcm_s16le')
+
+      # 解码输入音频帧并编码到输出容器
+      for frame in input_container.decode(audio=0):
+        frame.pts = None  # 重置时间戳
+        for packet in output_stream.encode(frame):
+          output_container.mux(packet)
+
+      # 刷新编码器
+      for packet in output_stream.encode(None):
+        output_container.mux(packet)
+
+    # 获取 WAV 字节流
+    output_buffer.seek(0)
+    wav_bytes = output_buffer.read()
+
+  return wav_bytes
+
+
+def load_audio(blob: bytes) -> tuple[np.ndarray, int]:
   """load audio file"""
+  blob = convert_input_bytes_to_wav_bytes(blob)
   with io.BytesIO(blob) as f:
     try:
       data, sample_rate = sf.read(
